@@ -319,6 +319,12 @@ void Econet::parse_message_(bool is_tx) {
 // For ENUM_TEXT it's 1 byte for the enum value, followed by one byte for the length of the enum text, and finally
 // followed by the bytes of the enum text padded with trailing whitespace.
 void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8_t *p, uint8_t len) {
+  constexpr uint8_t RESPONSE_HEADER_SIZE = 3;
+  if (len <= RESPONSE_HEADER_SIZE) {
+    ESP_LOGW(TAG, "Datapoint %s response too short (%d)", datapoint_id.name.c_str(), len);
+    return;
+  }
+
   EconetDatapointType reported_type = EconetDatapointType(p[0] & 0x7F);
   auto override_it = this->datapoint_type_overrides_.find(datapoint_id.name);
   EconetDatapointType item_type = reported_type;
@@ -328,15 +334,17 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       ESP_LOGD(TAG, "Forcing datapoint %s type %hhu", datapoint_id.name.c_str(), static_cast<uint8_t>(item_type));
     }
   }
+
+  const uint8_t *payload = p + RESPONSE_HEADER_SIZE;
+  len -= RESPONSE_HEADER_SIZE;
+
   switch (item_type) {
     case EconetDatapointType::FLOAT: {
-      p += 3;
-      len -= 3;
-      if (len != FLOAT_SIZE) {
-        ESP_LOGE(TAG, "Expected len of %d but was %d for %s", FLOAT_SIZE, len, datapoint_id.name.c_str());
+      if (len < FLOAT_SIZE) {
+        ESP_LOGE(TAG, "Expected len of at least %d but was %d for %s", FLOAT_SIZE, len, datapoint_id.name.c_str());
         return;
       }
-      float item_value = bytes_to_float(p);
+      float item_value = bytes_to_float(payload);
       ESP_LOGI(TAG, "  %s : %f", datapoint_id.name.c_str(), item_value);
       this->send_datapoint_(
           datapoint_id,
@@ -344,28 +352,29 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       break;
     }
     case EconetDatapointType::TEXT: {
-      p += 3;
-      len -= 3;
-      std::string s = trim_trailing_whitespace((const char *) p, len);
+      if (len == 0) {
+        ESP_LOGE(TAG, "Unexpected empty TEXT payload for %s", datapoint_id.name.c_str());
+        return;
+      }
+      std::string s = trim_trailing_whitespace((const char *) payload, len);
       ESP_LOGI(TAG, "  %s : (%s)", datapoint_id.name.c_str(), s.c_str());
       this->send_datapoint_(datapoint_id,
                             EconetDatapoint{.value_raw = {}, .value_string = s, .value_float = 0, .type = item_type});
       break;
     }
     case EconetDatapointType::ENUM_TEXT: {
-      p += 3;
-      len -= 3;
       if (len < 2) {
         ESP_LOGE(TAG, "Expected len of at least 2 but was %d for %s", len, datapoint_id.name.c_str());
         return;
       }
-      uint8_t item_value = p[0];
-      uint8_t item_text_len = p[1];
-      if (item_text_len != len - 2) {
-        ESP_LOGE(TAG, "Expected text len of %d but was %d for %s", len - 2, item_text_len, datapoint_id.name.c_str());
-        return;
+      uint8_t item_value = payload[0];
+      uint8_t item_text_len = payload[1];
+      if (item_text_len > len - 2) {
+        ESP_LOGE(TAG, "Expected text len of at most %d but was %d for %s", len - 2, item_text_len,
+                 datapoint_id.name.c_str());
+        item_text_len = len - 2;
       }
-      std::string s = trim_trailing_whitespace((const char *) p + 2, item_text_len);
+      std::string s = trim_trailing_whitespace((const char *) payload + 2, item_text_len);
       ESP_LOGI(TAG, "  %s : %d (%s)", datapoint_id.name.c_str(), item_value, s.c_str());
       this->send_datapoint_(
           datapoint_id,
