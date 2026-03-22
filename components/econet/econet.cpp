@@ -319,7 +319,15 @@ void Econet::parse_message_(bool is_tx) {
 // For ENUM_TEXT it's 1 byte for the enum value, followed by one byte for the length of the enum text, and finally
 // followed by the bytes of the enum text padded with trailing whitespace.
 void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8_t *p, uint8_t len) {
-  EconetDatapointType item_type = EconetDatapointType(p[0] & 0x7F);
+  EconetDatapointType reported_type = EconetDatapointType(p[0] & 0x7F);
+  auto override_it = this->datapoint_type_overrides_.find(datapoint_id.name);
+  EconetDatapointType item_type = reported_type;
+  if (override_it != this->datapoint_type_overrides_.end()) {
+    item_type = override_it->second;
+    if (item_type != reported_type) {
+      ESP_LOGD(TAG, "Forcing datapoint %s type %hhu", datapoint_id.name.c_str(), static_cast<uint8_t>(item_type));
+    }
+  }
   switch (item_type) {
     case EconetDatapointType::FLOAT: {
       p += 3;
@@ -757,6 +765,10 @@ void Econet::register_listener(const std::string &datapoint_id, int8_t request_m
       }
     }
   }
+}
+
+void Econet::register_datapoint_type_override(const std::string &datapoint_id, uint8_t type) {
+  this->datapoint_type_overrides_[datapoint_id] = EconetDatapointType(type);
 }
 
 // Called from a Home Assistant exposed service to read a datapoint.

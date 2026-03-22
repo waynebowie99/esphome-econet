@@ -119,6 +119,7 @@ class Econet : public Component, public uart::UARTDevice {
     this->mcu_connected_binary_sensor_ = sensor;
   }
   void set_flow_control_pin(GPIOPin *flow_control_pin) { this->flow_control_pin_ = flow_control_pin; }
+  void register_datapoint_type_override(const std::string &datapoint_id, uint8_t type);
 
   void set_float_datapoint_value(const std::string &datapoint_id, float value, uint32_t address = 0);
   void set_enum_datapoint_value(const std::string &datapoint_id, uint8_t value, uint32_t address = 0);
@@ -168,6 +169,7 @@ class Econet : public Component, public uart::UARTDevice {
   std::array<std::vector<std::string>, MAX_REQUEST_MODS> request_datapoint_ids_;
   std::array<uint32_t, MAX_REQUEST_MODS> request_mod_last_requested_{};
   std::vector<uint8_t> request_mods_;
+  std::map<std::string, EconetDatapointType> datapoint_type_overrides_;
   std::vector<EconetDatapointID> raw_datapoint_ids_;
   std::vector<EconetDatapointID> request_once_datapoint_ids_;
   std::vector<DatapointEntry> datapoints_;

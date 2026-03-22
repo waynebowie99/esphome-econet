@@ -34,6 +34,42 @@ To install the ESPHome-econet software, connect your ESP device to your computer
 
 For alternative software installation methods and details on how to customize your configuration, check out [the detailed Software Configuration and Installation Guide on our wiki](https://github.com/esphome-econet/esphome-econet/wiki/Initial-ESPHome%E2%80%90econet-Software-Configuration-and-Installation).
 
+## Datapoint Type Overrides
+
+Some Rheem controllers report a custom datapoint type that currently maps to `UNSUPPORTED` in the driver. Use the `datapoint_type_overrides` option inside the `econet:` block to tell the driver which payload type to expect instead. Accepted values are `float`, `text`, `enum_text`, and `raw` (matching `EconetDatapointType`) in any case.
+
+The R962V configuration already enables the overrides for the datapoints that show those warnings:
+
+```yaml
+econet:
+  dst_address: ${thermostat_address}
+  datapoint_type_overrides:
+    F_ACTCFM: float
+    F_ACTRPM: float
+    RELH7005: float
+    INDOORKW: float
+    AUTOMODE: text
+    DHUMENAB: enum_text
+    SCHEDULE: enum_text
+    SPT: float
+    HEATSETP: float
+    COOLSETP: float
+    DHUMSETP: float
+    STATMODE: enum_text
+    STAT_FAN: enum_text
+    STATNFAN: enum_text
+    SCRNLOCK: enum_text
+    HUMDCNFG: enum_text
+    FAN_MODE: enum_text
+    HUMDCTRL: enum_text
+    HUM_WFAN: enum_text
+    HUMSMART: enum_text
+    HMTARGET: float
+    RELHOFFS: float
+```
+
+This lets those datapoints parse as their expected types and avoids the unsupported warnings while leaving the rest of the configuration unchanged.
+
 ## Installation Overview
 
 For a video overview of how to setup the recommended hardware and deploy ESPHome-econet to it, please check out this video helpfully created by community member [Ylianst](https://github.com/Ylianst).

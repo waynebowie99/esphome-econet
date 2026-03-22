@@ -21,6 +21,7 @@ CONF_ON_DATAPOINT_UPDATE = "on_datapoint_update"
 CONF_DATAPOINT_TYPE = "datapoint_type"
 CONF_REQUEST_MOD = "request_mod"
 CONF_REQUEST_ONCE = "request_once"
+CONF_DATAPOINT_TYPE_OVERRIDES = "datapoint_type_overrides"
 CONF_REQUEST_MOD_UPDATE_INTERVALS = "request_mod_update_intervals"
 CONF_REQUEST_MOD_ADDRESSES = "request_mod_addresses"
 CONF_MCU_CONNECTED_TIMEOUT = "mcu_connected_timeout"
@@ -41,6 +42,13 @@ DATAPOINT_TRIGGERS = {
         "EconetRawDatapointUpdateTrigger",
         automation.Trigger.template(DATAPOINT_TYPES[DPTYPE_RAW]),
     ),
+}
+
+DATAPOINT_TYPE_OVERRIDE_OPTIONS = {
+    "float": 0,
+    "text": 1,
+    "enum_text": 2,
+    "raw": 4,
 }
 
 
@@ -78,6 +86,14 @@ def validate_request_mod_addresses(value):
     return value
 
 
+def validate_datapoint_type_name(value):
+    cv.check_not_templatable(value)
+    normalized = cv.string_strict(value).lower()
+    if normalized not in DATAPOINT_TYPE_OVERRIDE_OPTIONS:
+        raise cv.Invalid(f"Unknown datapoint type override: {value}")
+    return DATAPOINT_TYPE_OVERRIDE_OPTIONS[normalized]
+
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -113,6 +129,9 @@ CONFIG_SCHEMA = (
                 esphome_binary_sensor.BinarySensor,
                 device_class=DEVICE_CLASS_CONNECTIVITY,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_DATAPOINT_TYPE_OVERRIDES): cv.Schema(
+                {cv.string_strict: validate_datapoint_type_name}
             ),
         }
     )
@@ -156,6 +175,10 @@ async def to_code(config):
             config[CONF_MCU_CONNECTED_BINARY_SENSOR]
         )
         cg.add(var.set_mcu_connected_binary_sensor(sens))
+    if CONF_DATAPOINT_TYPE_OVERRIDES in config:
+        datapoint_overrides = config[CONF_DATAPOINT_TYPE_OVERRIDES]
+        for datapoint_id, datapoint_type in datapoint_overrides.items():
+            cg.add(var.register_datapoint_type_override(datapoint_id, datapoint_type))
     for conf in config.get(CONF_ON_DATAPOINT_UPDATE, []):
         trigger = cg.new_Pvariable(
             conf[CONF_TRIGGER_ID],
